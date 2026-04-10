@@ -12,10 +12,9 @@ class AppUserModel extends AppUser {
     super.preferences,
     super.averageRating,
     super.verification,
+    super.role,
     super.co2SavedKg,
   });
-
-  // ── Firestore → Model ────────────────────────────────────────────────────
 
   factory AppUserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -35,11 +34,10 @@ class AppUserModel extends AppUser {
       preferences: List<String>.from(map['preferences'] ?? []),
       averageRating: (map['averageRating'] as num?)?.toDouble() ?? 0.0,
       verification: _parseVerification(map['verification']),
+      role: _parseRole(map['role']),
       co2SavedKg: (map['co2SavedKg'] as num?)?.toDouble() ?? 0.0,
     );
   }
-
-  // ── Model → Firestore ────────────────────────────────────────────────────
 
   Map<String, dynamic> toMap() {
     return {
@@ -51,11 +49,10 @@ class AppUserModel extends AppUser {
       'preferences': preferences,
       'averageRating': averageRating,
       'verification': verification.name,
+      'role': role.name,
       'co2SavedKg': co2SavedKg,
     };
   }
-
-  // ── Helper ───────────────────────────────────────────────────────────────
 
   static VerificationStatus _parseVerification(dynamic value) {
     switch (value as String?) {
@@ -68,18 +65,26 @@ class AppUserModel extends AppUser {
     }
   }
 
-  /// Convert a domain entity to a model (useful when creating from Firebase user).
-  factory AppUserModel.fromEntity(AppUser user) {
-    return AppUserModel(
-      uid: user.uid,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      photoUrl: user.photoUrl,
-      dateInscription: user.dateInscription,
-      preferences: user.preferences,
-      averageRating: user.averageRating,
-      verification: user.verification,
-    );
+  static UserRole _parseRole(dynamic value) {
+    switch (value as String?) {
+      case 'driver':
+        return UserRole.driver;
+      default:
+        return UserRole.passenger;
+    }
   }
+
+  factory AppUserModel.fromEntity(AppUser user) => AppUserModel(
+    uid: user.uid,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    photoUrl: user.photoUrl,
+    dateInscription: user.dateInscription,
+    preferences: user.preferences,
+    averageRating: user.averageRating,
+    verification: user.verification,
+    role: user.role,
+    co2SavedKg: user.co2SavedKg,
+  );
 }

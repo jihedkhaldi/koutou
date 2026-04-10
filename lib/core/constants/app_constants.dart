@@ -6,12 +6,14 @@ abstract class AppRoutes {
   static const String home = '/home';
   static const String map = '/map';
   static const String trips = '/trips';
+  static const String allRides = '/all-rides';
   static const String messages = '/messages';
   static const String profile = '/profile';
   static const String tripDetail = '/trip';
   static const String createRide = '/create-ride';
   static const String notifications = '/notifications';
   static const String search = '/search';
+  static const String chat = '/chat';
 }
 
 abstract class AppStrings {

@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../../core/errors/exceptions.dart';
 import '../../core/errors/failures.dart';
 import '../../domain/entities/ride.dart';
@@ -8,16 +7,14 @@ import '../datasources/ride_remote_datasource.dart';
 import '../models/ride_model.dart';
 
 class RideRepositoryImpl implements RideRepository {
-  final RideRemoteDataSource _remoteDataSource;
-
+  final RideRemoteDataSource _remote;
   RideRepositoryImpl({required RideRemoteDataSource remoteDataSource})
-    : _remoteDataSource = remoteDataSource;
+    : _remote = remoteDataSource;
 
   @override
   Future<Ride> createRide(Ride ride) async {
     try {
-      final model = RideModel.fromEntity(ride);
-      return await _remoteDataSource.createRide(model);
+      return await _remote.createRide(RideModel.fromEntity(ride));
     } on ServerException catch (e) {
       throw ServerFailure(message: e.message);
     }
@@ -26,7 +23,7 @@ class RideRepositoryImpl implements RideRepository {
   @override
   Future<Ride?> getRideById(String id) async {
     try {
-      return await _remoteDataSource.getRideById(id);
+      return await _remote.getRideById(id);
     } on ServerException catch (e) {
       throw ServerFailure(message: e.message);
     }
@@ -36,30 +33,37 @@ class RideRepositoryImpl implements RideRepository {
   Stream<List<Ride>> getNearbyRides({
     required GeoPoint location,
     double radiusKm = 20,
-  }) {
-    return _remoteDataSource
-        .getNearbyRides(location: location, radiusKm: radiusKm)
-        .handleError((e) {
-          if (e is ServerException) throw ServerFailure(message: e.message);
-          throw ServerFailure(message: e.toString());
-        });
-  }
+  }) => _remote
+      .getNearbyRides(location: location, radiusKm: radiusKm)
+      .handleError((e) {
+        if (e is ServerException) throw ServerFailure(message: e.message);
+      });
 
   @override
-  Stream<List<Ride>> getUserRides(String userId) {
-    return _remoteDataSource.getUserRides(userId).handleError((e) {
-      if (e is ServerException) throw ServerFailure(message: e.message);
-      throw ServerFailure(message: e.toString());
-    });
-  }
+  Stream<List<Ride>> getUserRides(String userId) =>
+      _remote.getUserRides(userId).handleError((e) {
+        if (e is ServerException) throw ServerFailure(message: e.message);
+      });
 
   @override
-  Future<void> bookRide({
+  Future<void> requestBooking({
     required String rideId,
     required String userId,
   }) async {
     try {
-      await _remoteDataSource.bookRide(rideId: rideId, userId: userId);
+      await _remote.requestBooking(rideId: rideId, userId: userId);
+    } on ServerException catch (e) {
+      throw ServerFailure(message: e.message);
+    }
+  }
+
+  @override
+  Future<void> confirmPassenger({
+    required String rideId,
+    required String passengerId,
+  }) async {
+    try {
+      await _remote.confirmPassenger(rideId: rideId, passengerId: passengerId);
     } on ServerException catch (e) {
       throw ServerFailure(message: e.message);
     }
@@ -71,7 +75,7 @@ class RideRepositoryImpl implements RideRepository {
     required String userId,
   }) async {
     try {
-      await _remoteDataSource.cancelBooking(rideId: rideId, userId: userId);
+      await _remote.cancelBooking(rideId: rideId, userId: userId);
     } on ServerException catch (e) {
       throw ServerFailure(message: e.message);
     }
@@ -80,7 +84,7 @@ class RideRepositoryImpl implements RideRepository {
   @override
   Future<void> cancelRide(String rideId) async {
     try {
-      await _remoteDataSource.cancelRide(rideId);
+      await _remote.cancelRide(rideId);
     } on ServerException catch (e) {
       throw ServerFailure(message: e.message);
     }
@@ -89,7 +93,22 @@ class RideRepositoryImpl implements RideRepository {
   @override
   Future<void> completeRide(String rideId) async {
     try {
-      await _remoteDataSource.completeRide(rideId);
+      await _remote.completeRide(rideId);
+    } on ServerException catch (e) {
+      throw ServerFailure(message: e.message);
+    }
+  }
+
+  @override
+  Future<void> updatePassengerCo2({
+    required List<String> passengerIds,
+    required double co2PerPassenger,
+  }) async {
+    try {
+      await _remote.updatePassengerCo2(
+        passengerIds: passengerIds,
+        co2PerPassenger: co2PerPassenger,
+      );
     } on ServerException catch (e) {
       throw ServerFailure(message: e.message);
     }

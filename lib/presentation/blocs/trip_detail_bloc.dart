@@ -3,8 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/entities/app_user.dart';
 import '../../../domain/entities/ride.dart';
 import '../../../domain/repositories/ride_repository.dart';
-
-// ── Events ────────────────────────────────────────────────────────────────────
+import '../../../domain/repositories/user_repository.dart';
 
 abstract class TripDetailEvent extends Equatable {
   const TripDetailEvent();
@@ -19,6 +18,7 @@ class TripDetailLoadRequested extends TripDetailEvent {
   List<Object?> get props => [rideId];
 }
 
+/// Passenger requests a booking — status becomes Pending until driver confirms.
 class TripDetailBookRequested extends TripDetailEvent {
   final String userId;
   const TripDetailBookRequested(this.userId);
@@ -26,7 +26,21 @@ class TripDetailBookRequested extends TripDetailEvent {
   List<Object?> get props => [userId];
 }
 
-// ── States ────────────────────────────────────────────────────────────────────
+/// Driver confirms a pending passenger.
+class TripDetailConfirmPassenger extends TripDetailEvent {
+  final String passengerId;
+  const TripDetailConfirmPassenger(this.passengerId);
+  @override
+  List<Object?> get props => [passengerId];
+}
+
+/// Cancel booking (passenger cancels, or driver rejects).
+class TripDetailCancelBooking extends TripDetailEvent {
+  final String userId;
+  const TripDetailCancelBooking(this.userId);
+  @override
+  List<Object?> get props => [userId];
+}
 
 abstract class TripDetailState extends Equatable {
   const TripDetailState();
@@ -41,37 +55,48 @@ class TripDetailLoading extends TripDetailState {}
 class TripDetailLoaded extends TripDetailState {
   final Ride ride;
   final AppUser? driver;
-  final bool isBooked;
   final bool isBooking;
+
+  /// Whether the current user has a pending booking request.
+  final bool hasPendingBooking;
+
+  /// Whether the current user is already confirmed.
+  final bool isConfirmed;
 
   const TripDetailLoaded({
     required this.ride,
     this.driver,
-    this.isBooked = false,
     this.isBooking = false,
+    this.hasPendingBooking = false,
+    this.isConfirmed = false,
   });
 
   TripDetailLoaded copyWith({
     Ride? ride,
     AppUser? driver,
-    bool? isBooked,
     bool? isBooking,
+    bool? hasPendingBooking,
+    bool? isConfirmed,
   }) => TripDetailLoaded(
     ride: ride ?? this.ride,
     driver: driver ?? this.driver,
-    isBooked: isBooked ?? this.isBooked,
     isBooking: isBooking ?? this.isBooking,
+    hasPendingBooking: hasPendingBooking ?? this.hasPendingBooking,
+    isConfirmed: isConfirmed ?? this.isConfirmed,
   );
 
   @override
-  List<Object?> get props => [ride, driver, isBooked, isBooking];
+  List<Object?> get props => [
+    ride,
+    driver,
+    isBooking,
+    hasPendingBooking,
+    isConfirmed,
+  ];
 }
 
-class TripDetailBooked extends TripDetailState {
-  final Ride ride;
-  const TripDetailBooked(this.ride);
-  @override
-  List<Object?> get props => [ride];
+class TripDetailBookingRequested extends TripDetailState {
+  const TripDetailBookingRequested();
 }
 
 class TripDetailError extends TripDetailState {
@@ -81,16 +106,20 @@ class TripDetailError extends TripDetailState {
   List<Object?> get props => [message];
 }
 
-// ── BLoC ──────────────────────────────────────────────────────────────────────
-
 class TripDetailBloc extends Bloc<TripDetailEvent, TripDetailState> {
   final RideRepository _rideRepository;
+  final UserRepository _userRepository;
 
-  TripDetailBloc({required RideRepository rideRepository})
-    : _rideRepository = rideRepository,
-      super(TripDetailInitial()) {
+  TripDetailBloc({
+    required RideRepository rideRepository,
+    required UserRepository userRepository,
+  }) : _rideRepository = rideRepository,
+       _userRepository = userRepository,
+       super(TripDetailInitial()) {
     on<TripDetailLoadRequested>(_onLoad);
     on<TripDetailBookRequested>(_onBook);
+    on<TripDetailConfirmPassenger>(_onConfirm);
+    on<TripDetailCancelBooking>(_onCancel);
   }
 
   Future<void> _onLoad(
@@ -104,7 +133,8 @@ class TripDetailBloc extends Bloc<TripDetailEvent, TripDetailState> {
         emit(const TripDetailError('Ride not found.'));
         return;
       }
-      emit(TripDetailLoaded(ride: ride));
+      final driver = await _userRepository.getUserById(ride.driverId);
+      emit(TripDetailLoaded(ride: ride, driver: driver));
     } catch (e) {
       emit(TripDetailError(e.toString()));
     }
@@ -118,11 +148,63 @@ class TripDetailBloc extends Bloc<TripDetailEvent, TripDetailState> {
     final current = state as TripDetailLoaded;
     emit(current.copyWith(isBooking: true));
     try {
-      await _rideRepository.bookRide(
+      await _rideRepository.requestBooking(
         rideId: current.ride.id,
         userId: event.userId,
       );
-      emit(TripDetailBooked(current.ride));
+      // Reload ride to get updated passenger lists
+      final updated = await _rideRepository.getRideById(current.ride.id);
+      emit(
+        TripDetailLoaded(
+          ride: updated ?? current.ride,
+          driver: current.driver,
+          hasPendingBooking: true,
+          isConfirmed: false,
+        ),
+      );
+    } catch (e) {
+      emit(TripDetailError(e.toString()));
+    }
+  }
+
+  Future<void> _onConfirm(
+    TripDetailConfirmPassenger event,
+    Emitter<TripDetailState> emit,
+  ) async {
+    if (state is! TripDetailLoaded) return;
+    final current = state as TripDetailLoaded;
+    try {
+      await _rideRepository.confirmPassenger(
+        rideId: current.ride.id,
+        passengerId: event.passengerId,
+      );
+      final updated = await _rideRepository.getRideById(current.ride.id);
+      emit(current.copyWith(ride: updated ?? current.ride));
+    } catch (e) {
+      emit(TripDetailError(e.toString()));
+    }
+  }
+
+  Future<void> _onCancel(
+    TripDetailCancelBooking event,
+    Emitter<TripDetailState> emit,
+  ) async {
+    if (state is! TripDetailLoaded) return;
+    final current = state as TripDetailLoaded;
+    try {
+      await _rideRepository.cancelBooking(
+        rideId: current.ride.id,
+        userId: event.userId,
+      );
+      final updated = await _rideRepository.getRideById(current.ride.id);
+      emit(
+        TripDetailLoaded(
+          ride: updated ?? current.ride,
+          driver: current.driver,
+          hasPendingBooking: false,
+          isConfirmed: false,
+        ),
+      );
     } catch (e) {
       emit(TripDetailError(e.toString()));
     }

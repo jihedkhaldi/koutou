@@ -17,15 +17,16 @@ abstract class RideRepository {
   /// Stream rides where the current user is driver or passenger.
   Stream<List<Ride>> getUserRides(String userId);
 
-  /// Add a passenger to a ride.
-  Future<void> bookRide({required String rideId, required String userId});
-
-  /// Remove a passenger from a ride.
+  Future<void> requestBooking({required String rideId, required String userId});
+  Future<void> confirmPassenger({
+    required String rideId,
+    required String passengerId,
+  });
   Future<void> cancelBooking({required String rideId, required String userId});
-
-  /// Driver cancels the entire ride.
   Future<void> cancelRide(String rideId);
-
-  /// Mark a ride as completed.
   Future<void> completeRide(String rideId);
+  Future<void> updatePassengerCo2({
+    required List<String> passengerIds,
+    required double co2PerPassenger,
+  });
 }

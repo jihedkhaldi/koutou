@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../presentation/blocs/profile_bloc.dart';
 import '../../presentation/widgets/shared_widgets.dart';
+import '../blocs/profile_bloc.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});

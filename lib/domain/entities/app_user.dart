@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 
 enum VerificationStatus { unverified, pending, verified }
 
+enum UserRole { passenger, driver }
+
 class AppUser extends Equatable {
   final String uid;
   final String name;
@@ -12,6 +14,7 @@ class AppUser extends Equatable {
   final List<String> preferences;
   final double averageRating;
   final VerificationStatus verification;
+  final UserRole role;
   final double co2SavedKg;
 
   const AppUser({
@@ -24,8 +27,14 @@ class AppUser extends Equatable {
     this.preferences = const [],
     this.averageRating = 0.0,
     this.verification = VerificationStatus.unverified,
+    this.role = UserRole.passenger,
     this.co2SavedKg = 0.0,
   });
+
+  bool get isDriver => role == UserRole.driver;
+  bool get isVerifiedDriver =>
+      isDriver && verification == VerificationStatus.verified;
+  bool get isPassenger => role == UserRole.passenger;
 
   AppUser copyWith({
     String? uid,
@@ -37,6 +46,7 @@ class AppUser extends Equatable {
     List<String>? preferences,
     double? averageRating,
     VerificationStatus? verification,
+    UserRole? role,
     double? co2SavedKg,
   }) {
     return AppUser(
@@ -49,6 +59,7 @@ class AppUser extends Equatable {
       preferences: preferences ?? this.preferences,
       averageRating: averageRating ?? this.averageRating,
       verification: verification ?? this.verification,
+      role: role ?? this.role,
       co2SavedKg: co2SavedKg ?? this.co2SavedKg,
     );
   }
@@ -64,6 +75,7 @@ class AppUser extends Equatable {
     preferences,
     averageRating,
     verification,
+    role,
     co2SavedKg,
   ];
 }
