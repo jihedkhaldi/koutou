@@ -12,3 +12,4 @@ export 'profile_page.dart';
 export 'chat_page.dart';
 export 'passenger/all_rides_page.dart';
 export 'driver/create_ride_page.dart';
+export 'driver/ride_preferences_page.dart';

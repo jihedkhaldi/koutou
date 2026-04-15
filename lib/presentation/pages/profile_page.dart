@@ -83,6 +83,11 @@ class _ProfilePageState extends State<ProfilePage> {
               ? state.distanceSharedKm
               : 1240.0;
           final photoUrl = state is ProfileLoaded ? state.user.photoUrl : '';
+          final vehicles = state is ProfileLoaded ? state.user.vehicles : const <String>[];
+          final pref = state is ProfileLoaded
+              ? state.user.ridePreferences
+              : const <String, dynamic>{};
+          final prefSubtitle = _preferencesSummary(pref);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
@@ -323,6 +328,22 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 10),
                 _SettingsTile(
+                  icon: Icons.directions_car_outlined,
+                  title: 'Vehicles',
+                  subtitle: vehicles.isEmpty
+                      ? 'Manage your registered cars'
+                      : vehicles.join(' • '),
+                  onTap: () {},
+                ),
+                const SizedBox(height: 10),
+                _SettingsTile(
+                  icon: Icons.tune_rounded,
+                  title: 'Preferences',
+                  subtitle: prefSubtitle,
+                  onTap: () => context.push(AppRoutes.ridePreferences),
+                ),
+                const SizedBox(height: 10),
+                _SettingsTile(
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'Payment Methods',
                   subtitle: 'Bank accounts and cards',
@@ -365,6 +386,16 @@ class _ProfilePageState extends State<ProfilePage> {
         },
       ),
     );
+  }
+
+  String _preferencesSummary(Map<String, dynamic> pref) {
+    if (pref.isEmpty) return 'Smoking, pets, music levels';
+    final parts = <String>[];
+    parts.add((pref['smokingAllowed'] as bool? ?? false) ? 'Smoking yes' : 'No smoking');
+    parts.add((pref['petsAllowed'] as bool? ?? true) ? 'Pets yes' : 'Pets no');
+    final music = pref['musicLevel'] as String?;
+    if (music != null) parts.add(music);
+    return parts.join(', ');
   }
 }
 

@@ -21,6 +21,7 @@ class Ride extends Equatable {
   /// Passengers confirmed by the driver
   final List<String> confirmedPassengerIds;
   final RideStatus status;
+  final String note;
 
   /// Optional stored CO2 value
   final double? co2SavedKg;
@@ -38,6 +39,7 @@ class Ride extends Equatable {
     this.pendingPassengerIds = const [],
     this.confirmedPassengerIds = const [],
     this.status = RideStatus.scheduled,
+    this.note = '',
     this.co2SavedKg = 0.0,
   });
 
@@ -106,6 +108,7 @@ class Ride extends Equatable {
     List<String>? pendingPassengerIds,
     List<String>? confirmedPassengerIds,
     RideStatus? status,
+    String? note,
     double? co2SavedKg,
   }) {
     return Ride(
@@ -122,6 +125,7 @@ class Ride extends Equatable {
       confirmedPassengerIds:
           confirmedPassengerIds ?? this.confirmedPassengerIds,
       status: status ?? this.status,
+      note: note ?? this.note,
       co2SavedKg: co2SavedKg ?? this.co2SavedKg,
     );
   }
@@ -138,6 +142,7 @@ class Ride extends Equatable {
     pendingPassengerIds,
     confirmedPassengerIds,
     status,
+    note,
     co2SavedKg,
   ];
 }

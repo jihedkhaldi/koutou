@@ -22,6 +22,10 @@ abstract class RideRepository {
     required String rideId,
     required String passengerId,
   });
+  Future<void> rejectPassenger({
+    required String rideId,
+    required String passengerId,
+  });
   Future<void> cancelBooking({required String rideId, required String userId});
   Future<void> cancelRide(String rideId);
   Future<void> completeRide(String rideId);

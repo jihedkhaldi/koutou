@@ -27,7 +27,6 @@ class _CreateRidePageState extends State<CreateRidePage> {
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 30);
   int _seats = 3;
   double _pricePerSeat = 12.50;
-  final Set<String> _selectedPrefs = {};
   final _notesCtrl = TextEditingController();
   bool _isPublishing = false;
 
@@ -97,6 +96,7 @@ class _CreateRidePageState extends State<CreateRidePage> {
       pendingPassengerIds: const [],
       confirmedPassengerIds: const [],
       status: RideStatus.scheduled,
+      note: _notesCtrl.text.trim(),
     );
     try {
       await context.read<RideRepository>().createRide(ride);
@@ -129,13 +129,6 @@ class _CreateRidePageState extends State<CreateRidePage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
   );
-
-  void _togglePref(String id) => setState(() {
-    if (_selectedPrefs.contains(id))
-      _selectedPrefs.remove(id);
-    else
-      _selectedPrefs.add(id);
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -472,53 +465,6 @@ class _CreateRidePageState extends State<CreateRidePage> {
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── Preferences
-            const Text(
-              'Preferences',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textDark,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _PrefChip(
-                  id: 'no_smoking',
-                  icon: Icons.smoke_free_rounded,
-                  label: 'Non-smoking',
-                  selected: _selectedPrefs.contains('no_smoking'),
-                  onTap: () => _togglePref('no_smoking'),
-                ),
-                _PrefChip(
-                  id: 'pets_welcome',
-                  icon: Icons.pets_outlined,
-                  label: 'Pets allowed',
-                  selected: _selectedPrefs.contains('pets_welcome'),
-                  onTap: () => _togglePref('pets_welcome'),
-                ),
-                _PrefChip(
-                  id: 'medium_bag',
-                  icon: Icons.luggage_outlined,
-                  label: 'L-Bag Max',
-                  selected: _selectedPrefs.contains('medium_bag'),
-                  onTap: () => _togglePref('medium_bag'),
-                ),
-                _PrefChip(
-                  id: 'quiet_trip',
-                  icon: Icons.chat_bubble_outline_rounded,
-                  label: 'Quiet trip',
-                  selected: _selectedPrefs.contains('quiet_trip'),
-                  onTap: () => _togglePref('quiet_trip'),
-                ),
-              ],
             ),
 
             const SizedBox(height: 20),
@@ -1013,55 +959,3 @@ class _SeatButton extends StatelessWidget {
   );
 }
 
-class _PrefChip extends StatelessWidget {
-  final String id;
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _PrefChip({
-    required this.id,
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: selected ? AppColors.forestGreen : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: selected ? AppColors.forestGreen : const Color(0xFFDDDDDD),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: selected ? Colors.white : AppColors.textDark,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : AppColors.textDark,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}

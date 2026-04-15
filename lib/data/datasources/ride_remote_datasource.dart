@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/errors/exceptions.dart';
 import '../models/ride_model.dart';
@@ -13,6 +14,10 @@ abstract class RideRemoteDataSource {
   Stream<List<RideModel>> getUserRides(String userId);
   Future<void> requestBooking({required String rideId, required String userId});
   Future<void> confirmPassenger({
+    required String rideId,
+    required String passengerId,
+  });
+  Future<void> rejectPassenger({
     required String rideId,
     required String passengerId,
   });
@@ -34,6 +39,37 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
 
   CollectionReference<Map<String, dynamic>> get _rides =>
       _firestore.collection('rides');
+  CollectionReference<Map<String, dynamic>> get _notifications =>
+      _firestore.collection('notifications');
+
+  Future<void> _updateLatestBookingNotification({
+    required Transaction tx,
+    required String driverId,
+    required String rideId,
+    required String passengerId,
+    required String newType,
+    required String title,
+    required String body,
+    required bool requiresAction,
+  }) async {
+    final q = _notifications
+        .where('userId', isEqualTo: driverId)
+        .where('relatedId', isEqualTo: rideId)
+        .where('passengerId', isEqualTo: passengerId)
+        .where('type', isEqualTo: 'bookingRequested')
+        .limit(1);
+    final qSnap = await q.get();
+    if (qSnap.docs.isEmpty) return;
+    tx.update(qSnap.docs.first.reference, {
+      'type': newType,
+      'title': title,
+      'body': body,
+      'requiresAction': requiresAction,
+      // make it pop to top as "just updated"
+      'timestamp': Timestamp.now(),
+      // keep isRead as-is (don't force unread/read changes)
+    });
+  }
 
   @override
   Future<RideModel> createRide(RideModel ride) async {
@@ -66,7 +102,7 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
         .snapshots()
         .map(
           (snap) => snap.docs.map((d) => RideModel.fromFirestore(d)).where((r) {
-            final dist = _haversineKm(
+            final dist = _distanceKm(
               location.latitude,
               location.longitude,
               r.departure.latitude,
@@ -132,17 +168,34 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
       await _firestore.runTransaction((tx) async {
         final ref = _rides.doc(rideId);
         final snap = await tx.get(ref);
-        if (!snap.exists)
+        if (!snap.exists) {
           throw const ServerException(message: 'Ride not found.');
+        }
         final ride = RideModel.fromFirestore(snap);
-        if (ride.isFull)
+        if (ride.isFull) {
           throw const ServerException(message: 'No seats available.');
+        }
         if (ride.pendingPassengerIds.contains(userId) ||
             ride.confirmedPassengerIds.contains(userId)) {
           throw const ServerException(message: 'Already booked.');
         }
         tx.update(ref, {
           'pendingPassengerIds': FieldValue.arrayUnion([userId]),
+        });
+
+        // Notify the driver (in-app notifications collection).
+        // This enables the driver to open Trip Details and confirm the seat.
+        final notifRef = _notifications.doc();
+        tx.set(notifRef, {
+          'userId': ride.driverId,
+          'type': 'bookingRequested',
+          'title': 'New booking request',
+          'body': 'A passenger requested a seat for your trip. Tap to review.',
+          'timestamp': Timestamp.now(),
+          'isRead': false,
+          'requiresAction': true,
+          'relatedId': rideId,
+          'passengerId': userId, // extra field; safe for older clients to ignore
         });
       });
     } on ServerException {
@@ -161,15 +214,66 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
       await _firestore.runTransaction((tx) async {
         final ref = _rides.doc(rideId);
         final snap = await tx.get(ref);
-        if (!snap.exists)
+        if (!snap.exists) {
           throw const ServerException(message: 'Ride not found.');
+        }
         final ride = RideModel.fromFirestore(snap);
-        if (ride.isFull)
+        if (ride.isFull) {
           throw const ServerException(message: 'Ride is already full.');
+        }
         tx.update(ref, {
           'pendingPassengerIds': FieldValue.arrayRemove([passengerId]),
           'confirmedPassengerIds': FieldValue.arrayUnion([passengerId]),
         });
+
+        await _updateLatestBookingNotification(
+          tx: tx,
+          driverId: ride.driverId,
+          rideId: rideId,
+          passengerId: passengerId,
+          newType: 'bookingApproved',
+          title: 'Passenger approved',
+          body: 'You approved this booking request.',
+          requiresAction: false,
+        );
+      });
+    } on ServerException {
+      rethrow;
+    } catch (e) {
+      throw ServerException(message: e.toString());
+    }
+  }
+
+  @override
+  Future<void> rejectPassenger({
+    required String rideId,
+    required String passengerId,
+  }) async {
+    try {
+      await _firestore.runTransaction((tx) async {
+        final ref = _rides.doc(rideId);
+        final snap = await tx.get(ref);
+        if (!snap.exists) {
+          throw const ServerException(message: 'Ride not found.');
+        }
+        final ride = RideModel.fromFirestore(snap);
+
+        tx.update(ref, {
+          'pendingPassengerIds': FieldValue.arrayRemove([passengerId]),
+          // ensure the passenger isn't in confirmed either
+          'confirmedPassengerIds': FieldValue.arrayRemove([passengerId]),
+        });
+
+        await _updateLatestBookingNotification(
+          tx: tx,
+          driverId: ride.driverId,
+          rideId: rideId,
+          passengerId: passengerId,
+          newType: 'bookingRejected',
+          title: 'Passenger rejected',
+          body: 'You rejected this booking request.',
+          requiresAction: false,
+        );
       });
     } on ServerException {
       rethrow;
@@ -246,22 +350,19 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
     }
   }
 
-  double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
-    const r = 6371.0;
-    final dLat = (lat2 - lat1) * 3.141592653589793 / 180;
-    final dLng = (lng2 - lng1) * 3.141592653589793 / 180;
-    final sinDLat = dLat / 2 - (dLat * dLat * dLat) / 48;
-    final sinDLng = dLng / 2 - (dLng * dLng * dLng) / 48;
+  double _distanceKm(double lat1, double lng1, double lat2, double lng2) {
+    const earthRadiusKm = 6371.0;
+    final dLat = _degToRad(lat2 - lat1);
+    final dLng = _degToRad(lng2 - lng1);
     final a =
-        sinDLat * sinDLat +
-        _cosRad(lat1 * 3.141592653589793 / 180) *
-            _cosRad(lat2 * 3.141592653589793 / 180) *
-            sinDLng *
-            sinDLng;
-    double sq = a;
-    for (int i = 0; i < 10; i++) sq = (sq + a / sq) / 2;
-    return r * 2 * (a + a * a * a / 6);
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degToRad(lat1)) *
+            math.cos(_degToRad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
   }
 
-  double _cosRad(double x) => 1 - x * x / 2 + x * x * x * x / 24;
+  double _degToRad(double deg) => deg * math.pi / 180.0;
 }

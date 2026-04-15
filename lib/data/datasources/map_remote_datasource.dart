@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:http/http.dart' as http;
 import '../../core/errors/exceptions.dart';
@@ -117,6 +118,42 @@ class MapRemoteDataSourceImpl implements MapRemoteDataSource {
     required double toLat,
     required double toLng,
   }) async {
+    final hasValidOrsKey =
+        _orsApiKey.isNotEmpty && _orsApiKey != 'YOUR_ORS_API_KEY_HERE';
+
+    if (hasValidOrsKey) {
+      final orsRoute = await _getRouteFromOrs(
+        fromLat: fromLat,
+        fromLng: fromLng,
+        toLat: toLat,
+        toLng: toLng,
+      );
+      if (orsRoute.isNotEmpty) {
+        return orsRoute;
+      }
+    }
+
+    final osrmRoute = await _getRouteFromOsrm(
+      fromLat: fromLat,
+      fromLng: fromLng,
+      toLat: toLat,
+      toLng: toLng,
+    );
+    if (osrmRoute.isNotEmpty) {
+      return osrmRoute;
+    }
+
+    throw const ServerException(
+      message: 'Could not compute road route for this trip.',
+    );
+  }
+
+  Future<List<List<double>>> _getRouteFromOrs({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+  }) async {
     const baseUrl =
         'https://api.openrouteservice.org/v2/directions/driving-car';
     final body = jsonEncode({
@@ -135,7 +172,7 @@ class MapRemoteDataSourceImpl implements MapRemoteDataSource {
         body: body,
       );
       if (response.statusCode != 200) {
-        throw ServerException(message: 'ORS error: ${response.statusCode}');
+        return const [];
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final coords =
@@ -147,27 +184,61 @@ class MapRemoteDataSourceImpl implements MapRemoteDataSource {
             (c) => [(c as List)[1].toDouble(), c[0].toDouble()],
           )
           .toList();
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<List<double>>> _getRouteFromOsrm({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+  }) async {
+    final uri = Uri.parse(
+      'https://router.project-osrm.org/route/v1/driving/'
+      '$fromLng,$fromLat;$toLng,$toLat'
+      '?overview=full&geometries=geojson',
+    );
+
+    try {
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        return const [];
+      }
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final routes = json['routes'] as List?;
+      if (routes == null || routes.isEmpty) {
+        return const [];
+      }
+
+      final geometry = routes.first['geometry'] as Map<String, dynamic>?;
+      final coords = geometry?['coordinates'] as List? ?? const [];
+
+      return coords
+          .map<List<double>>(
+            (c) => [(c as List)[1].toDouble(), c[0].toDouble()],
+          )
+          .toList();
+    } catch (_) {
+      return const [];
     }
   }
 
   double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
-    const r = 6371.0;
-    final dLat = (lat2 - lat1) * 3.141592653589793 / 180;
-    final dLng = (lng2 - lng1) * 3.141592653589793 / 180;
-    final sinDLat = dLat / 2;
-    final sinDLng = dLng / 2;
+    const earthRadiusKm = 6371.0;
+    final dLat = _degToRad(lat2 - lat1);
+    final dLng = _degToRad(lng2 - lng1);
     final a =
-        sinDLat * sinDLat +
-        _cos(lat1 * 3.141592653589793 / 180) *
-            _cos(lat2 * 3.141592653589793 / 180) *
-            sinDLng *
-            sinDLng;
-    double sq = a < 0 ? 0 : a;
-    for (int i = 0; i < 10; i++) sq = (sq + a / (sq == 0 ? 1 : sq)) / 2;
-    return r * 2 * (sq + sq * sq * sq / 6);
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degToRad(lat1)) *
+            math.cos(_degToRad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
   }
 
-  double _cos(double x) => 1 - x * x / 2 + x * x * x * x / 24;
+  double _degToRad(double deg) => deg * math.pi / 180.0;
 }

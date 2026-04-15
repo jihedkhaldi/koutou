@@ -25,12 +25,9 @@ class _MapPageState extends State<MapPage> {
 
   // Track which driver was last tapped so second tap navigates
   String? _lastTappedDriverId;
-
-  @override
-  void initState() {
-    super.initState();
-    context.read<MapBloc>().add(const MapInitialized());
-  }
+  /// Same pattern for trip markers (departure pins).
+  String? _lastTappedRideId;
+  bool _didCenterOnUser = false;
 
   @override
   void dispose() {
@@ -40,6 +37,7 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _onDriverTap(MapLoaded state, DriverLocation driver) {
+    _lastTappedRideId = null;
     if (_lastTappedDriverId == driver.driverId &&
         state.selectedDriver?.driverId == driver.driverId) {
       // Second tap on same driver → navigate to trip detail
@@ -62,6 +60,27 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
+  void _onTripMarkerTap(MapLoaded state, Ride ride) {
+    _lastTappedDriverId = null;
+    if (_lastTappedRideId == ride.id && state.selectedRideId == ride.id) {
+      context.push('${AppRoutes.tripDetail}/${ride.id}');
+    } else {
+      _lastTappedRideId = ride.id;
+      context.read<MapBloc>().add(MapRideSelected(ride));
+      _mapController.move(
+        LatLng(ride.departure.latitude, ride.departure.longitude),
+        12.5,
+      );
+      if (_sheetController.isAttached) {
+        _sheetController.animateTo(
+          0.30,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -70,7 +89,16 @@ class _MapPageState extends State<MapPage> {
         onNotificationTap: () => context.push(AppRoutes.notifications),
         avatarUrl: '',
       ),
-      body: BlocBuilder<MapBloc, MapState>(
+      body: BlocConsumer<MapBloc, MapState>(
+        listener: (context, state) {
+          if (state is MapLoaded && !_didCenterOnUser) {
+            _mapController.move(LatLng(state.userLat, state.userLng), 12);
+            _didCenterOnUser = true;
+          }
+          if (state is MapLoading) {
+            _didCenterOnUser = false;
+          }
+        },
         builder: (context, state) {
           final isLoaded = state is MapLoaded;
           final userLat = isLoaded ? state.userLat : 36.8065;
@@ -80,7 +108,18 @@ class _MapPageState extends State<MapPage> {
           final rides = isLoaded ? state.filteredRides : <Ride>[];
           final allRides = isLoaded ? state.nearbyRides : <Ride>[];
           final selected = isLoaded ? state.selectedDriver : null;
+          final selectedRideId = isLoaded ? state.selectedRideId : null;
           final polyline = isLoaded ? state.routePolyline : <List<double>>[];
+          final mapFilter = isLoaded ? state.mapFilter : MapFilter.defaults;
+          Ride? selectedRideForPins;
+          if (isLoaded && selected == null && selectedRideId != null) {
+            for (final r in allRides) {
+              if (r.id == selectedRideId) {
+                selectedRideForPins = r;
+                break;
+              }
+            }
+          }
 
           return Stack(
             children: [
@@ -94,6 +133,7 @@ class _MapPageState extends State<MapPage> {
                     onTap: (_, __) {
                       context.read<MapBloc>().add(const MapDriverDeselected());
                       _lastTappedDriverId = null;
+                      _lastTappedRideId = null;
                     },
                   ),
                   children: [
@@ -103,7 +143,7 @@ class _MapPageState extends State<MapPage> {
                       userAgentPackageName: 'com.rideleaf.app',
                     ),
 
-                    // ── Route polyline
+                    // ── Selected trip road route polyline
                     if (polyline.isNotEmpty)
                       PolylineLayer(
                         polylines: [
@@ -120,10 +160,11 @@ class _MapPageState extends State<MapPage> {
                       ),
 
                     // ── Departure & Arrival pins when route active
-                    if (polyline.isNotEmpty && selected != null)
+                    if (polyline.isNotEmpty &&
+                        (selected != null || selectedRideForPins != null))
                       MarkerLayer(
                         markers: [
-                          if (selected.departureLat != null)
+                          if (selected != null && selected.departureLat != null)
                             Marker(
                               point: LatLng(
                                 selected.departureLat!,
@@ -146,12 +187,60 @@ class _MapPageState extends State<MapPage> {
                                   size: 10,
                                 ),
                               ),
+                            )
+                          else if (selectedRideForPins != null)
+                            Marker(
+                              point: LatLng(
+                                selectedRideForPins.departure.latitude,
+                                selectedRideForPins.departure.longitude,
+                              ),
+                              width: 32,
+                              height: 32,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.forestGreen,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.circle,
+                                  color: Colors.white,
+                                  size: 10,
+                                ),
+                              ),
                             ),
-                          if (selected.arrivalLat != null)
+                          if (selected != null && selected.arrivalLat != null)
                             Marker(
                               point: LatLng(
                                 selected.arrivalLat!,
                                 selected.arrivalLng!,
+                              ),
+                              width: 32,
+                              height: 32,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.orange,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.location_on,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            )
+                          else if (selectedRideForPins != null)
+                            Marker(
+                              point: LatLng(
+                                selectedRideForPins.arrival.latitude,
+                                selectedRideForPins.arrival.longitude,
                               ),
                               width: 32,
                               height: 32,
@@ -198,7 +287,29 @@ class _MapPageState extends State<MapPage> {
                       ],
                     ),
 
-                    // ── Driver markers
+                    // ── Trip departure markers (filtered trips)
+                    if (state is MapLoaded && rides.isNotEmpty)
+                      MarkerLayer(
+                        markers: rides.map((ride) {
+                          final isTripSel = selectedRideId == ride.id;
+                          return Marker(
+                            point: LatLng(
+                              ride.departure.latitude,
+                              ride.departure.longitude,
+                            ),
+                            width: 46,
+                            height: 46,
+                            child: GestureDetector(
+                              onTap: () => _onTripMarkerTap(state, ride),
+                              child: _TripDepartureMarker(
+                                isSelected: isTripSel,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                    // ── Driver markers (live position)
                     MarkerLayer(
                       markers: drivers.map((d) {
                         final isSel = selected?.driverId == d.driverId;
@@ -296,7 +407,8 @@ class _MapPageState extends State<MapPage> {
               ),
 
               // ── Second-tap hint badge
-              if (selected != null && selected.rideId != null)
+              if ((selected != null && selected.rideId != null) ||
+                  (selectedRideId != null && polyline.isNotEmpty))
                 Positioned(
                   top: 80,
                   left: 0,
@@ -373,6 +485,10 @@ class _MapPageState extends State<MapPage> {
                             rideCount: allRides.length,
                             filteredCount: rides.length,
                             searchQuery: isLoaded ? state.searchQuery : '',
+                            radiusKm: mapFilter.radiusKm,
+                            hasPreferenceFilters:
+                                mapFilter.requiredPreferenceTags.isNotEmpty,
+                            hasPriceCap: mapFilter.maxPricePerSeat != null,
                             onClearSearch: () {
                               _searchCtrl.clear();
                               context.read<MapBloc>().add(
@@ -383,7 +499,7 @@ class _MapPageState extends State<MapPage> {
                           ),
                         ),
 
-                        // ── Ride cards
+            // ── Ride cards
                         if (state is MapLoading)
                           const SliverFillRemaining(
                             child: Center(
@@ -450,13 +566,35 @@ class _MapPageState extends State<MapPage> {
                                 i,
                               ) {
                                 final ride = rides[i];
-                                final isSel = selected?.rideId == ride.id;
+                                final isSel = selectedRideId == ride.id;
                                 return _RideSheetCard(
                                   ride: ride,
                                   isHighlighted: isSel,
-                                  onTap: () => context.push(
-                                    '${AppRoutes.tripDetail}/${ride.id}',
-                                  ),
+                                  onTap: () {
+                                    if (isSel) {
+                                      context.push(
+                                        '${AppRoutes.tripDetail}/${ride.id}',
+                                      );
+                                      return;
+                                    }
+                                    context.read<MapBloc>().add(
+                                      MapRideSelected(ride),
+                                    );
+                                    _mapController.move(
+                                      LatLng(
+                                        ride.departure.latitude,
+                                        ride.departure.longitude,
+                                      ),
+                                      12.5,
+                                    );
+                                    if (_sheetController.isAttached) {
+                                      _sheetController.animateTo(
+                                        0.30,
+                                        duration: const Duration(milliseconds: 300),
+                                        curve: Curves.easeOut,
+                                      );
+                                    }
+                                  },
                                 );
                               }, childCount: rides.length),
                             ),
@@ -466,6 +604,28 @@ class _MapPageState extends State<MapPage> {
                   );
                 },
               ),
+
+              if (state is MapPermissionDenied)
+                Positioned(
+                  top: 128,
+                  left: 16,
+                  right: 16,
+                  child: _MapNoticeBanner(
+                    icon: Icons.location_off_rounded,
+                    message:
+                        'Location permission denied. Showing trips near default position.',
+                  ),
+                ),
+              if (state is MapError)
+                Positioned(
+                  top: 128,
+                  left: 16,
+                  right: 16,
+                  child: _MapNoticeBanner(
+                    icon: Icons.warning_amber_rounded,
+                    message: state.message,
+                  ),
+                ),
             ],
           );
         },
@@ -474,41 +634,304 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _showFilterSheet(BuildContext context, MapState state) {
-    showModalBottomSheet(
+    if (state is! MapLoaded) {
+      return;
+    }
+    final mapBloc = context.read<MapBloc>();
+    final initial = state.mapFilter;
+    var radius = initial.radiusKm;
+    final prefs = Set<String>.from(initial.requiredPreferenceTags);
+    var capPrice = initial.maxPricePerSeat != null;
+    var maxPrice = initial.maxPricePerSeat ?? 50.0;
+
+    showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDDDDDD),
-                borderRadius: BorderRadius.circular(2),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 12,
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Filter Rides',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDDDDDD),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filter nearby trips',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              radius = kDefaultMapRadiusKm;
+                              prefs.clear();
+                              capPrice = false;
+                              maxPrice = 50;
+                            });
+                          },
+                          child: const Text(
+                            'Reset',
+                            style: TextStyle(color: AppColors.forestGreen),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Search radius: ${radius.round()} km',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Slider(
+                      value: radius.clamp(5, 100),
+                      min: 5,
+                      max: 100,
+                      divisions: 19,
+                      activeColor: AppColors.forestGreen,
+                      onChanged: (v) => setModalState(() => radius = v),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Trip preferences',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Show rides that include all selected tags.',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _FilterPrefChip(
+                          label: 'Non-smoking',
+                          icon: Icons.smoke_free_rounded,
+                          selected: prefs.contains('no_smoking'),
+                          onTap: () => setModalState(() {
+                            if (prefs.contains('no_smoking')) {
+                              prefs.remove('no_smoking');
+                            } else {
+                              prefs.add('no_smoking');
+                            }
+                          }),
+                        ),
+                        _FilterPrefChip(
+                          label: 'Pets OK',
+                          icon: Icons.pets_outlined,
+                          selected: prefs.contains('pets_welcome'),
+                          onTap: () => setModalState(() {
+                            if (prefs.contains('pets_welcome')) {
+                              prefs.remove('pets_welcome');
+                            } else {
+                              prefs.add('pets_welcome');
+                            }
+                          }),
+                        ),
+                        _FilterPrefChip(
+                          label: 'Luggage',
+                          icon: Icons.luggage_outlined,
+                          selected: prefs.contains('medium_bag'),
+                          onTap: () => setModalState(() {
+                            if (prefs.contains('medium_bag')) {
+                              prefs.remove('medium_bag');
+                            } else {
+                              prefs.add('medium_bag');
+                            }
+                          }),
+                        ),
+                        _FilterPrefChip(
+                          label: 'Quiet',
+                          icon: Icons.volume_off_outlined,
+                          selected: prefs.contains('quiet_trip'),
+                          onTap: () => setModalState(() {
+                            if (prefs.contains('quiet_trip')) {
+                              prefs.remove('quiet_trip');
+                            } else {
+                              prefs.add('quiet_trip');
+                            }
+                          }),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Max price per seat'),
+                      subtitle: const Text(
+                        'Hide rides above this price',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: capPrice,
+                      activeThumbColor: AppColors.forestGreen,
+                      onChanged: (v) => setModalState(() {
+                        capPrice = v;
+                        if (!v) {
+                          maxPrice = 50;
+                        }
+                      }),
+                    ),
+                    if (capPrice) ...[
+                      Text(
+                        'Up to ${maxPrice.toStringAsFixed(0)} DT / seat',
+                        style: const TextStyle(color: AppColors.textMuted),
+                      ),
+                      Slider(
+                        value: maxPrice.clamp(1, 200),
+                        min: 1,
+                        max: 200,
+                        divisions: 199,
+                        activeColor: AppColors.forestGreen,
+                        onChanged: (v) => setModalState(() => maxPrice = v),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.forestGreen,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: () {
+                          mapBloc.add(
+                            MapFiltersChanged(
+                              MapFilter(
+                                radiusKm: radius,
+                                requiredPreferenceTags: Set<String>.from(prefs),
+                                maxPricePerSeat: capPrice ? maxPrice : null,
+                              ),
+                            ),
+                          );
+                          Navigator.of(sheetContext).pop();
+                        },
+                        child: const Text(
+                          'Apply filters',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _FilterPrefChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterPrefChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: selected ? Colors.white : AppColors.textDark),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: AppColors.forestGreen,
+      checkmarkColor: Colors.white,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : AppColors.textDark,
+        fontWeight: FontWeight.w600,
+        fontSize: 13,
+      ),
+    );
+  }
+}
+
+class _MapNoticeBanner extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _MapNoticeBanner({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.orange, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
                 color: AppColors.textDark,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'More filter options coming soon.',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -520,6 +943,9 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
   final int rideCount;
   final int filteredCount;
   final String searchQuery;
+  final double radiusKm;
+  final bool hasPreferenceFilters;
+  final bool hasPriceCap;
   final VoidCallback onClearSearch;
   final VoidCallback onFilter;
 
@@ -527,6 +953,9 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
     required this.rideCount,
     required this.filteredCount,
     required this.searchQuery,
+    required this.radiusKm,
+    required this.hasPreferenceFilters,
+    required this.hasPriceCap,
     required this.onClearSearch,
     required this.onFilter,
   });
@@ -539,7 +968,10 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_SheetHeader old) =>
       old.rideCount != rideCount ||
       old.filteredCount != filteredCount ||
-      old.searchQuery != searchQuery;
+      old.searchQuery != searchQuery ||
+      old.radiusKm != radiusKm ||
+      old.hasPreferenceFilters != hasPreferenceFilters ||
+      old.hasPriceCap != hasPriceCap;
 
   @override
   Widget build(
@@ -547,11 +979,18 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
+    final kmLabel = radiusKm == radiusKm.roundToDouble()
+        ? radiusKm.toStringAsFixed(0)
+        : radiusKm.toStringAsFixed(1);
     final title = searchQuery.isNotEmpty
-        ? '$filteredCount of $rideCount rides'
+        ? '$filteredCount of $rideCount trips'
         : rideCount == 0
-        ? 'Looking for drivers...'
-        : '$rideCount Driver${rideCount != 1 ? 's' : ''} found nearby';
+        ? 'No trips in range'
+        : '$rideCount trip${rideCount != 1 ? 's' : ''} · $kmLabel km';
+    final filterActive =
+        (radiusKm - kDefaultMapRadiusKm).abs() > 0.01 ||
+        hasPreferenceFilters ||
+        hasPriceCap;
 
     return Container(
       color: Colors.white,
@@ -633,23 +1072,41 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: onFilter,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F0F0),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Filter',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textDark,
-                          fontSize: 13,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F0F0),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Filter',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (filterActive)
+                          Positioned(
+                            right: 2,
+                            top: 2,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.orange,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],
@@ -657,6 +1114,39 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Trip departure marker (on map) ───────────────────────────────────────────
+
+class _TripDepartureMarker extends StatelessWidget {
+  final bool isSelected;
+  const _TripDepartureMarker({required this.isSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(
+          color: isSelected ? AppColors.orange : AppColors.forestGreen,
+          width: isSelected ? 3 : 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.directions_car_rounded,
+        color: isSelected ? AppColors.orange : AppColors.forestGreen,
+        size: 22,
       ),
     );
   }

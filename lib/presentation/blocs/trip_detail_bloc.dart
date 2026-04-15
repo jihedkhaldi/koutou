@@ -34,6 +34,14 @@ class TripDetailConfirmPassenger extends TripDetailEvent {
   List<Object?> get props => [passengerId];
 }
 
+/// Driver rejects a pending passenger.
+class TripDetailRejectPassenger extends TripDetailEvent {
+  final String passengerId;
+  const TripDetailRejectPassenger(this.passengerId);
+  @override
+  List<Object?> get props => [passengerId];
+}
+
 /// Cancel booking (passenger cancels, or driver rejects).
 class TripDetailCancelBooking extends TripDetailEvent {
   final String userId;
@@ -119,6 +127,7 @@ class TripDetailBloc extends Bloc<TripDetailEvent, TripDetailState> {
     on<TripDetailLoadRequested>(_onLoad);
     on<TripDetailBookRequested>(_onBook);
     on<TripDetailConfirmPassenger>(_onConfirm);
+    on<TripDetailRejectPassenger>(_onReject);
     on<TripDetailCancelBooking>(_onCancel);
   }
 
@@ -175,6 +184,24 @@ class TripDetailBloc extends Bloc<TripDetailEvent, TripDetailState> {
     final current = state as TripDetailLoaded;
     try {
       await _rideRepository.confirmPassenger(
+        rideId: current.ride.id,
+        passengerId: event.passengerId,
+      );
+      final updated = await _rideRepository.getRideById(current.ride.id);
+      emit(current.copyWith(ride: updated ?? current.ride));
+    } catch (e) {
+      emit(TripDetailError(e.toString()));
+    }
+  }
+
+  Future<void> _onReject(
+    TripDetailRejectPassenger event,
+    Emitter<TripDetailState> emit,
+  ) async {
+    if (state is! TripDetailLoaded) return;
+    final current = state as TripDetailLoaded;
+    try {
+      await _rideRepository.rejectPassenger(
         rideId: current.ride.id,
         passengerId: event.passengerId,
       );

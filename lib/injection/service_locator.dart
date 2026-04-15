@@ -92,7 +92,7 @@ Future<void> setupServiceLocator() async {
     () => TripDetailBloc(rideRepository: sl(), userRepository: sl()),
   );
   sl.registerFactory<MapBloc>(
-    () => MapBloc(mapRepository: sl(), rideRepository: sl()),
+    () => MapBloc(mapRepository: sl(), rideRepository: sl(), userRepository: sl()),
   );
   sl.registerFactory<MessagesBloc>(() => MessagesBloc(messageRepository: sl()));
   sl.registerFactory<NotificationsBloc>(

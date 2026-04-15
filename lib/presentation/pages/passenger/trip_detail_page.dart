@@ -414,8 +414,8 @@ class _TripDetailPageState extends State<TripDetailPage> {
 
                     const SizedBox(height: 16),
 
-                    // ── Preferences
-                    if (driver != null && driver.preferences.isNotEmpty) ...[
+                    // ── Preferences (from driver's profile)
+                    if (driver != null && driver.ridePreferenceTags.isNotEmpty) ...[
                       const Text(
                         'TRIP PREFERENCES',
                         style: TextStyle(
@@ -429,7 +429,7 @@ class _TripDetailPageState extends State<TripDetailPage> {
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
-                        children: driver.preferences
+                        children: driver.ridePreferenceTags
                             .map(
                               (pref) => _PreferenceChip(
                                 icon: _iconForPref(pref),
@@ -437,6 +437,37 @@ class _TripDetailPageState extends State<TripDetailPage> {
                               ),
                             )
                             .toList(),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    if (ride.note.trim().isNotEmpty) ...[
+                      const Text(
+                        'DRIVER NOTE',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFEDEDED)),
+                        ),
+                        child: Text(
+                          ride.note,
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -460,7 +491,7 @@ class _TripDetailPageState extends State<TripDetailPage> {
                             TripDetailConfirmPassenger(pid),
                           ),
                           onReject: () => context.read<TripDetailBloc>().add(
-                            TripDetailCancelBooking(pid),
+                            TripDetailRejectPassenger(pid),
                           ),
                         ),
                       ),
@@ -569,6 +600,14 @@ class _TripDetailPageState extends State<TripDetailPage> {
         return Icons.pets_outlined;
       case 'medium_bag':
         return Icons.luggage_outlined;
+      case 'small_bag_only':
+        return Icons.work_outline_rounded;
+      case 'large_items':
+        return Icons.luggage_rounded;
+      case 'quiet_trip':
+        return Icons.volume_off_rounded;
+      case 'chatty':
+        return Icons.chat_bubble_outline_rounded;
       case 'max_2_back':
         return Icons.airline_seat_recline_normal_outlined;
       default:
@@ -584,6 +623,14 @@ class _TripDetailPageState extends State<TripDetailPage> {
         return 'Pets Welcome';
       case 'medium_bag':
         return 'Medium Bag';
+      case 'small_bag_only':
+        return 'Small bag only';
+      case 'large_items':
+        return 'Large items';
+      case 'quiet_trip':
+        return 'Quiet ride';
+      case 'chatty':
+        return 'Chatty';
       case 'max_2_back':
         return 'Max 2 in back';
       default:

@@ -15,6 +15,9 @@ class MainShell extends StatefulWidget {
   /// Tab indices: 0=Home, 1=Trips, 2=Map, 3=Messages, 4=Profile
   static void switchTab(BuildContext context, int index) {
     context.findAncestorStateOfType<_MainShellState>()?.switchTab(index);
+    if (index == 2) {
+      context.read<MapBloc>().add(const MapInitialized());
+    }
   }
 
   @override
@@ -45,11 +48,18 @@ class _MainShellState extends State<MainShell> {
         BlocProvider(create: (_) => sl<NotificationsBloc>()),
         BlocProvider(create: (_) => sl<ProfileBloc>()),
       ],
-      child: Scaffold(
-        body: IndexedStack(index: _currentIndex, children: _pages),
-        bottomNavigationBar: RideLeafBottomNav(
-          currentIndex: _currentIndex,
-          onTap: switchTab,
+      child: Builder(
+        builder: (blocContext) => Scaffold(
+          body: IndexedStack(index: _currentIndex, children: _pages),
+          bottomNavigationBar: RideLeafBottomNav(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              switchTab(index);
+              if (index == 2) {
+                blocContext.read<MapBloc>().add(const MapInitialized());
+              }
+            },
+          ),
         ),
       ),
     );

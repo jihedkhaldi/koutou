@@ -15,6 +15,7 @@ class RideModel extends Ride {
     super.pendingPassengerIds,
     super.confirmedPassengerIds,
     super.status,
+    super.note,
     super.co2SavedKg,
   });
 
@@ -43,6 +44,7 @@ class RideModel extends Ride {
         map['confirmedPassengerIds'] ?? [],
       ),
       status: _parseStatus(map['status']),
+      note: map['note'] as String? ?? '',
       co2SavedKg: (map['co2SavedKg'] as num?)?.toDouble() ?? 0.0,
     );
   }
@@ -64,6 +66,7 @@ class RideModel extends Ride {
       'pendingPassengerIds': pendingPassengerIds,
       'confirmedPassengerIds': confirmedPassengerIds,
       'status': status.name,
+      'note': note,
       'co2SavedKg': co2SavedKg,
     };
   }
@@ -103,6 +106,7 @@ class RideModel extends Ride {
       pendingPassengerIds: ride.pendingPassengerIds,
       confirmedPassengerIds: ride.confirmedPassengerIds,
       status: ride.status,
+      note: ride.note,
       co2SavedKg: ride.effectiveCo2SavedKg,
     );
   }

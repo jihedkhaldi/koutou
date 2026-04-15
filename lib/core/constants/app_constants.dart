@@ -14,6 +14,7 @@ abstract class AppRoutes {
   static const String notifications = '/notifications';
   static const String search = '/search';
   static const String chat = '/chat';
+  static const String ridePreferences = '/ride-preferences';
 }
 
 abstract class AppStrings {

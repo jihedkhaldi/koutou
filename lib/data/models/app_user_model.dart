@@ -10,10 +10,13 @@ class AppUserModel extends AppUser {
     super.photoUrl,
     required super.dateInscription,
     super.preferences,
+    super.vehicles,
+    super.ridePreferences,
     super.averageRating,
     super.verification,
     super.role,
     super.co2SavedKg,
+    super.distanceSharedKm,
   });
 
   factory AppUserModel.fromFirestore(DocumentSnapshot doc) {
@@ -32,10 +35,15 @@ class AppUserModel extends AppUser {
           ? (map['dateInscription'] as Timestamp).toDate()
           : DateTime.now(),
       preferences: List<String>.from(map['preferences'] ?? []),
+      vehicles: List<String>.from(map['vehicles'] ?? []),
+      ridePreferences: Map<String, dynamic>.from(
+        map['ridePreferences'] as Map? ?? const {},
+      ),
       averageRating: (map['averageRating'] as num?)?.toDouble() ?? 0.0,
       verification: _parseVerification(map['verification']),
       role: _parseRole(map['role']),
       co2SavedKg: (map['co2SavedKg'] as num?)?.toDouble() ?? 0.0,
+      distanceSharedKm: (map['distanceSharedKm'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -47,10 +55,13 @@ class AppUserModel extends AppUser {
       'photoUrl': photoUrl,
       'dateInscription': Timestamp.fromDate(dateInscription),
       'preferences': preferences,
+      'vehicles': vehicles,
+      'ridePreferences': ridePreferences,
       'averageRating': averageRating,
       'verification': verification.name,
       'role': role.name,
       'co2SavedKg': co2SavedKg,
+      'distanceSharedKm': distanceSharedKm,
     };
   }
 
@@ -82,9 +93,12 @@ class AppUserModel extends AppUser {
     photoUrl: user.photoUrl,
     dateInscription: user.dateInscription,
     preferences: user.preferences,
+    vehicles: user.vehicles,
+    ridePreferences: user.ridePreferences,
     averageRating: user.averageRating,
     verification: user.verification,
     role: user.role,
     co2SavedKg: user.co2SavedKg,
+    distanceSharedKm: user.distanceSharedKm,
   );
 }

@@ -25,4 +25,31 @@ class UserRepositoryImpl implements UserRepository {
       throw ServerFailure(message: e.message);
     }
   }
+
+  @override
+  Future<void> updateRidePreferences({
+    required String uid,
+    required Map<String, dynamic> ridePreferences,
+  }) async {
+    try {
+      await _remote.updateRidePreferences(
+        uid: uid,
+        ridePreferences: ridePreferences,
+      );
+    } on ServerException catch (e) {
+      throw ServerFailure(message: e.message);
+    }
+  }
+
+  @override
+  Future<void> updateVehicles({
+    required String uid,
+    required List<String> vehicles,
+  }) async {
+    try {
+      await _remote.updateVehicles(uid: uid, vehicles: vehicles);
+    } on ServerException catch (e) {
+      throw ServerFailure(message: e.message);
+    }
+  }
 }

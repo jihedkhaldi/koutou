@@ -5,6 +5,7 @@ import '../../presentation/widgets/widgets.dart';
 import '../constants/app_constants.dart';
 import '../../injection/service_locator.dart';
 import '../../domain/repositories/ride_repository.dart';
+import '../../domain/repositories/user_repository.dart';
 import '../../presentation/blocs/blocs.dart';
 import '../../presentation/pages/pages.dart';
 
@@ -108,6 +109,16 @@ class AppRouter {
             BlocProvider(create: (_) => sl<NotificationsBloc>()),
           ],
           child: const NotificationsPage(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.ridePreferences,
+        builder: (c, s) => MultiBlocProvider(
+          providers: [BlocProvider.value(value: _auth)],
+          child: RepositoryProvider.value(
+            value: sl<UserRepository>(),
+            child: const RidePreferencesPage(),
+          ),
         ),
       ),
     ],

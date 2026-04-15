@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/app_notification.dart';
 import '../../presentation/blocs/blocs.dart';
 
@@ -145,9 +146,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     ...state.recent.map(
                       (n) => _NotificationCard(
                         notification: n,
-                        onTap: () => context.read<NotificationsBloc>().add(
-                          NotificationMarkRead(n.id),
-                        ),
+                        onTap: () {
+                          context.read<NotificationsBloc>().add(
+                            NotificationMarkRead(n.id),
+                          );
+                          if (n.relatedId != null &&
+                              n.type == NotificationType.bookingRequested) {
+                            context.push('${AppRoutes.tripDetail}/${n.relatedId}');
+                          }
+                        },
                       ),
                     ),
 
@@ -166,9 +173,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       ...state.earlier.map(
                         (n) => _NotificationCard(
                           notification: n,
-                          onTap: () => context.read<NotificationsBloc>().add(
-                            NotificationMarkRead(n.id),
-                          ),
+                          onTap: () {
+                            context.read<NotificationsBloc>().add(
+                              NotificationMarkRead(n.id),
+                            );
+                            if (n.relatedId != null &&
+                                n.type == NotificationType.bookingRequested) {
+                              context.push('${AppRoutes.tripDetail}/${n.relatedId}');
+                            }
+                          },
                         ),
                       ),
                     ],
@@ -258,6 +271,12 @@ class _NotificationCard extends StatelessWidget {
     switch (notification.type) {
       case NotificationType.tripConfirmed:
         return Icons.directions_car_rounded;
+      case NotificationType.bookingRequested:
+        return Icons.person_add_alt_1_rounded;
+      case NotificationType.bookingApproved:
+        return Icons.check_circle_outline_rounded;
+      case NotificationType.bookingRejected:
+        return Icons.cancel_outlined;
       case NotificationType.paymentReceived:
         return Icons.account_balance_wallet_outlined;
       case NotificationType.newMessage:
@@ -274,6 +293,9 @@ class _NotificationCard extends StatelessWidget {
   Color get _iconBg {
     switch (notification.type) {
       case NotificationType.tripConfirmed:
+      case NotificationType.bookingRequested:
+      case NotificationType.bookingApproved:
+      case NotificationType.bookingRejected:
       case NotificationType.paymentReceived:
       case NotificationType.accountVerified:
         return const Color(0xFFD4EDDA);
@@ -285,6 +307,9 @@ class _NotificationCard extends StatelessWidget {
   Color get _iconColor {
     switch (notification.type) {
       case NotificationType.tripConfirmed:
+      case NotificationType.bookingRequested:
+      case NotificationType.bookingApproved:
+      case NotificationType.bookingRejected:
       case NotificationType.paymentReceived:
       case NotificationType.accountVerified:
         return AppColors.forestGreen;

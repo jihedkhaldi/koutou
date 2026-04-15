@@ -70,6 +70,18 @@ class RideRepositoryImpl implements RideRepository {
   }
 
   @override
+  Future<void> rejectPassenger({
+    required String rideId,
+    required String passengerId,
+  }) async {
+    try {
+      await _remote.rejectPassenger(rideId: rideId, passengerId: passengerId);
+    } on ServerException catch (e) {
+      throw ServerFailure(message: e.message);
+    }
+  }
+
+  @override
   Future<void> cancelBooking({
     required String rideId,
     required String userId,
